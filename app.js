@@ -216,6 +216,7 @@ async function fetchWithProgress(url, progressCallback) {
     // Hardcoded fallback sizes in case headers are stripped by CDN/Proxies
     const fallbackSizes = {
         'yolo_text.onnx': 12701822,
+        'yolov8n.onnx': 12952537,
         'crnn_best.onnx': 35027438
     };
     
@@ -251,47 +252,83 @@ async function fetchWithProgress(url, progressCallback) {
     return allChunks;
 }
 
+// Cache Helper for model bytes
+const CACHE_NAME = 'model-cache-v1';
+
+async function getModelBytes(url, progressCallback) {
+    const useCache = ('caches' in window);
+    let cache = null;
+    if (useCache) {
+        try {
+            cache = await caches.open(CACHE_NAME);
+            const cachedResponse = await cache.match(url);
+            if (cachedResponse) {
+                console.log(`[Cache] Found model in cache: ${url}`);
+                progressCallback(100, "100% (Cached)");
+                const buffer = await cachedResponse.arrayBuffer();
+                return new Uint8Array(buffer);
+            }
+        } catch (e) {
+            console.warn(`[Cache] Failed to read from Cache Storage, falling back to fetch:`, e);
+        }
+    }
+
+    const bytes = await fetchWithProgress(url, progressCallback);
+
+    if (useCache && cache) {
+        try {
+            await cache.put(url, new Response(bytes, {
+                headers: {
+                    'Content-Type': 'application/octet-stream',
+                    'Content-Length': bytes.length.toString()
+                }
+            }));
+            console.log(`[Cache] Model successfully cached: ${url}`);
+        } catch (e) {
+            console.warn(`[Cache] Failed to write model to Cache Storage:`, e);
+        }
+    }
+    return bytes;
+}
+
+// Loader helper for a single model
+async function loadSingleModel(url, progressEl, badgeEl, assignSession) {
+    try {
+        const bytes = await getModelBytes(url, (percent, statusMsg) => {
+            progressEl.style.width = `${percent}%`;
+            badgeEl.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${statusMsg}`;
+        });
+        badgeEl.innerHTML = `<i class="fa-solid fa-bolt"></i> Compiling...`;
+        const session = await ort.InferenceSession.create(bytes);
+        assignSession(session);
+        badgeEl.className = "model-badge loaded";
+        badgeEl.innerHTML = `<i class="fa-solid fa-check"></i> Ready`;
+        progressEl.style.width = '100%';
+    } catch (err) {
+        console.error(`Failed to load model ${url}:`, err);
+        badgeEl.className = "model-badge error";
+        badgeEl.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Error`;
+        throw err;
+    }
+}
+
 // Initialise models
 async function initModels() {
     try {
-        console.log("Loading models...");
+        console.log("Loading models in parallel...");
         
-        // 1. Load YOLOv8 Text
-        const yoloBytes = await fetchWithProgress('weights/yolo_text.onnx', (percent, statusMsg) => {
-            yoloProgress.style.width = `${percent}%`;
-            yoloBadge.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${statusMsg}`;
-        });
-        yoloBadge.innerHTML = `<i class="fa-solid fa-bolt"></i> Compiling...`;
-        yoloSession = await ort.InferenceSession.create(yoloBytes);
-        yoloBadge.className = "model-badge loaded";
-        yoloBadge.innerHTML = `<i class="fa-solid fa-check"></i> Ready`;
-        
-        // 2. Load YOLOv8 COCO
-        const cocoBytes = await fetchWithProgress('weights/yolov8n.onnx', (percent, statusMsg) => {
-            cocoProgress.style.width = `${percent}%`;
-            cocoBadge.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${statusMsg}`;
-        });
-        cocoBadge.innerHTML = `<i class="fa-solid fa-bolt"></i> Compiling...`;
-        cocoSession = await ort.InferenceSession.create(cocoBytes);
-        cocoBadge.className = "model-badge loaded";
-        cocoBadge.innerHTML = `<i class="fa-solid fa-check"></i> Ready`;
-        
-        // 3. Load CRNN
-        const crnnBytes = await fetchWithProgress('weights/crnn_best.onnx', (percent, statusMsg) => {
-            crnnProgress.style.width = `${percent}%`;
-            crnnBadge.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${statusMsg}`;
-        });
-        crnnBadge.innerHTML = `<i class="fa-solid fa-bolt"></i> Compiling...`;
-        crnnSession = await ort.InferenceSession.create(crnnBytes);
-        crnnBadge.className = "model-badge loaded";
-        crnnBadge.innerHTML = `<i class="fa-solid fa-check"></i> Ready`;
+        await Promise.all([
+            loadSingleModel('weights/yolo_text.onnx', yoloProgress, yoloBadge, (session) => { yoloSession = session; }),
+            loadSingleModel('weights/yolov8n.onnx', cocoProgress, cocoBadge, (session) => { cocoSession = session; }),
+            loadSingleModel('weights/crnn_best.onnx', crnnProgress, crnnBadge, (session) => { crnnSession = session; })
+        ]);
         
         // Update general status
         statusIndicator.className = "status-indicator ready";
         statusText.textContent = "System Ready";
         uploadArea.classList.remove('disabled');
         fileInput.disabled = false;
-        console.log("All three models loaded successfully.");
+        console.log("All three models loaded successfully in parallel.");
     } catch (err) {
         console.error("Failed to load models:", err);
         statusText.textContent = "Initialization Failed";

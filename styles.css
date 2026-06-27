@@ -273,6 +273,12 @@ body {
     border: 1px solid rgba(16, 185, 129, 0.3);
 }
 
+.model-badge.error {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--error);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
 .progress-bar-container {
     height: 6px;
     background: rgba(255, 255, 255, 0.05);
