@@ -622,19 +622,6 @@ async function runInference() {
         statusIndicator.className = "status-indicator loading"; // turns warning/amber
     }
 }
-        
-        // Render Canvas
-        renderCanvas(results);
-        
-        // Render results table & stats
-        renderResultsTable(results, startTime);
-        
-    } catch (err) {
-        console.error("Inference failed:", err);
-        statusText.textContent = "Inference Error";
-        statusIndicator.className = "status-indicator loading"; // turns warning/amber
-    }
-}
 
 // Recognizer Engine Helper
 async function runCRNNOnCrop(x, y, w, h, cropCanvas, cropCtx) {
@@ -757,4 +744,8 @@ function renderResultsTable(results, startTime) {
 }
 
 // Run initial model loader
-document.addEventListener('DOMContentLoaded', initModels);
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initModels);
+} else {
+    initModels();
+}
