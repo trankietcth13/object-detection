@@ -146,27 +146,36 @@ async function fetchWithProgress(url, progressCallback) {
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     
     const contentLength = response.headers.get('content-length');
-    if (!contentLength) {
-        const blob = await response.blob();
-        progressCallback(100);
-        return new Uint8Array(await blob.arrayBuffer());
-    }
+    // Hardcoded fallback sizes in case headers are stripped by CDN/Proxies
+    const fallbackSizes = {
+        'yolo_text.onnx': 12701822,
+        'crnn_best.onnx': 35027438
+    };
     
-    const total = parseInt(contentLength, 10);
-    let loaded = 0;
+    const fileName = url.split('/').pop();
+    const total = contentLength ? parseInt(contentLength, 10) : (fallbackSizes[fileName] || 0);
+    
     const reader = response.body.getReader();
     const chunks = [];
+    let loaded = 0;
     
     while(true) {
         const {done, value} = await reader.read();
         if (done) break;
         chunks.push(value);
         loaded += value.length;
-        const percent = Math.round((loaded / total) * 100);
-        progressCallback(percent);
+        
+        const loadedMB = (loaded / (1024 * 1024)).toFixed(1);
+        if (total > 0) {
+            const totalMB = (total / (1024 * 1024)).toFixed(1);
+            const percent = Math.round((loaded / total) * 100);
+            progressCallback(percent, `${loadedMB} MB / ${totalMB} MB`);
+        } else {
+            progressCallback(0, `${loadedMB} MB loaded`);
+        }
     }
     
-    const allChunks = new Uint8Array(total);
+    const allChunks = new Uint8Array(loaded);
     let position = 0;
     for (const chunk of chunks) {
         allChunks.set(chunk, position);
@@ -181,9 +190,9 @@ async function initModels() {
         console.log("Loading models...");
         
         // 1. Load YOLOv8
-        const yoloBytes = await fetchWithProgress('weights/yolo_text.onnx', (percent) => {
+        const yoloBytes = await fetchWithProgress('weights/yolo_text.onnx', (percent, statusMsg) => {
             yoloProgress.style.width = `${percent}%`;
-            yoloBadge.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Downloading ${percent}%`;
+            yoloBadge.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${statusMsg}`;
         });
         yoloBadge.innerHTML = `<i class="fa-solid fa-bolt"></i> Compiling...`;
         yoloSession = await ort.InferenceSession.create(yoloBytes);
@@ -191,9 +200,9 @@ async function initModels() {
         yoloBadge.innerHTML = `<i class="fa-solid fa-check"></i> Ready`;
         
         // 2. Load CRNN
-        const crnnBytes = await fetchWithProgress('weights/crnn_best.onnx', (percent) => {
+        const crnnBytes = await fetchWithProgress('weights/crnn_best.onnx', (percent, statusMsg) => {
             crnnProgress.style.width = `${percent}%`;
-            crnnBadge.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Downloading ${percent}%`;
+            crnnBadge.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${statusMsg}`;
         });
         crnnBadge.innerHTML = `<i class="fa-solid fa-bolt"></i> Compiling...`;
         crnnSession = await ort.InferenceSession.create(crnnBytes);

@@ -25,3 +25,5 @@ env/
 # Model export scripts
 export_onnx.py
 merge_onnx.py
+
+.vercel
