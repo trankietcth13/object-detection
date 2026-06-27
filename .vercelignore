@@ -1,0 +1,11 @@
+# Exclude Python Streamlit app and local Python scripts from Vercel deployment
+app.py
+export_onnx.py
+merge_onnx.py
+requirements.txt
+
+# Exclude notebook and documentation
+Capstone2_Object_Detection_Recognition_ICDAR2003.ipynb
+TranTuanKiet_Capstone2_Report.docx
+*.pth
+*.pt
