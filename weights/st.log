@@ -1,0 +1,20 @@
+C:\Users\trank\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\authlib\_joserfc_helpers.py:8: AuthlibDeprecationWarning: authlib.jose module is deprecated, please use joserfc instead.
+It will be compatible before version 2.0.0.
+  from authlib.jose import ECKey
+C:\Users\trank\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\LocalCache\local-packages\Python311\site-packages\requests\__init__.py:113: RequestsDependencyWarning: urllib3 (2.6.3) or chardet (7.4.3)/charset_normalizer (3.4.4) doesn't match a supported version!
+  warnings.warn(
+
+  You can now view your Streamlit app in your browser.
+
+  Local URL: http://localhost:8501
+  Network URL: http://192.168.0.158:8501
+  External URL: http://14.191.93.82:8501
+
+2026-06-23 21:45:00.854 The `use_column_width` parameter has been deprecated and will be removed in a future release. Please utilize the `width` parameter instead.
+2026-06-23 21:45:45.099 The `use_column_width` parameter has been deprecated and will be removed in a future release. Please utilize the `width` parameter instead.
+2026-06-23 21:46:28.637 The `use_column_width` parameter has been deprecated and will be removed in a future release. Please utilize the `width` parameter instead.
+2026-06-23 21:47:07.550 The `use_column_width` parameter has been deprecated and will be removed in a future release. Please utilize the `width` parameter instead.
+2026-06-23 21:47:23.827 The `use_column_width` parameter has been deprecated and will be removed in a future release. Please utilize the `width` parameter instead.
+2026-06-23 21:47:37.059 The `use_column_width` parameter has been deprecated and will be removed in a future release. Please utilize the `width` parameter instead.
+2026-06-23 21:47:58.135 The `use_column_width` parameter has been deprecated and will be removed in a future release. Please utilize the `width` parameter instead.
+2026-06-23 21:48:16.659 The `use_column_width` parameter has been deprecated and will be removed in a future release. Please utilize the `width` parameter instead.

@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scene Text Reader — Object Detection & Recognition (ICDAR 2003)</title>
+    <!-- Google Fonts: Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome for Premium Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- ONNX Runtime Web CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="mesh-background"></div>
+    
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="logo-area">
+                <i class="fa-solid fa-eye-low-vision logo-icon"></i>
+                <div class="logo-text">
+                    <h1>Scene Text Reader</h1>
+                    <span>ICDAR 2003 OCR Pipeline</span>
+                </div>
+            </div>
+            <div class="system-status" id="systemStatus">
+                <span class="status-indicator loading"></span>
+                <span class="status-text">Initializing Models...</span>
+            </div>
+        </header>
+
+        <!-- Main Workspace -->
+        <main class="workspace-grid">
+            
+            <!-- Left Panel: Controls & Model Info -->
+            <section class="panel control-panel">
+                <div class="panel-header">
+                    <h2><i class="fa-solid fa-sliders"></i> Configuration</h2>
+                </div>
+                
+                <div class="panel-body">
+                    <!-- Model Loading Progress -->
+                    <div class="card model-card">
+                        <h3>Model Status</h3>
+                        <div class="model-status-item">
+                            <div class="model-meta">
+                                <span class="model-name">YOLOv8 Text Detector</span>
+                                <span class="model-badge" id="yoloBadge"><i class="fa-solid fa-spinner fa-spin"></i> Loading</span>
+                            </div>
+                            <div class="progress-bar-container">
+                                <div class="progress-bar" id="yoloProgress" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div class="model-status-item">
+                            <div class="model-meta">
+                                <span class="model-name">CRNN Text Recognizer</span>
+                                <span class="model-badge" id="crnnBadge"><i class="fa-solid fa-spinner fa-spin"></i> Loading</span>
+                            </div>
+                            <div class="progress-bar-container">
+                                <div class="progress-bar" id="crnnProgress" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Mode Selection -->
+                    <div class="control-group">
+                        <label class="control-label">Inference Mode</label>
+                        <div class="mode-tabs">
+                            <button class="mode-tab active" data-mode="full" id="modeFull">
+                                <i class="fa-solid fa-image"></i>
+                                <span>Full Pipeline</span>
+                                <small>Detect & Recognize</small>
+                            </button>
+                            <button class="mode-tab" data-mode="crop" id="modeCrop">
+                                <i class="fa-solid fa-crop-simple"></i>
+                                <span>Crop Only</span>
+                                <small>Recognize Box</small>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Slider for Bounding Box Threshold -->
+                    <div class="control-group" id="thresholdGroup">
+                        <div class="slider-header">
+                            <label class="control-label">Detection Confidence</label>
+                            <span class="slider-value" id="confVal">0.25</span>
+                        </div>
+                        <input type="range" min="0.05" max="0.90" step="0.05" value="0.25" class="custom-slider" id="confSlider">
+                        <div class="slider-labels">
+                            <span>High Recall (0.05)</span>
+                            <span>High Precision (0.90)</span>
+                        </div>
+                    </div>
+
+                    <!-- Upload Box -->
+                    <div class="upload-area disabled" id="uploadArea">
+                        <input type="file" id="fileInput" accept="image/png, image/jpeg, image/jpg" disabled style="display: none;">
+                        <div class="upload-content">
+                            <i class="fa-solid fa-cloud-arrow-up upload-icon"></i>
+                            <h3>Upload Scene Image</h3>
+                            <p>Drag and drop or click to select image</p>
+                            <span class="upload-note">Supports PNG, JPEG, JPG</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Middle/Right Panel: Canvas & Results -->
+            <section class="panel output-panel">
+                <div class="panel-header">
+                    <h2><i class="fa-solid fa-display"></i> Interactive Canvas</h2>
+                    <div class="canvas-actions">
+                        <button class="btn btn-secondary" id="clearBtn" disabled>
+                            <i class="fa-solid fa-trash-can"></i> Clear
+                        </button>
+                    </div>
+                </div>
+
+                <div class="panel-body canvas-container">
+                    <div class="canvas-wrapper" id="canvasWrapper">
+                        <div class="canvas-placeholder" id="canvasPlaceholder">
+                            <i class="fa-regular fa-image"></i>
+                            <p>Upload an image to start character recognition</p>
+                        </div>
+                        <canvas id="imageCanvas"></canvas>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Bottom/Results Panel -->
+            <section class="panel results-panel">
+                <div class="panel-header">
+                    <h2><i class="fa-solid fa-table-list"></i> Recognition Results</h2>
+                    <div class="results-stats" id="statsArea" style="display: none;">
+                        <span class="stat-badge"><i class="fa-solid fa-gauge-high"></i> Total Latency: <strong id="latencyVal">-</strong></span>
+                        <span class="stat-badge"><i class="fa-solid fa-font"></i> Found: <strong id="countVal">0</strong> word(s)</span>
+                    </div>
+                </div>
+
+                <div class="panel-body results-table-wrapper">
+                    <table class="results-table" id="resultsTable">
+                        <thead>
+                            <tr>
+                                <th style="width: 80px;">Index</th>
+                                <th style="width: 150px;">Confidence</th>
+                                <th style="width: 200px;">Bounding Box</th>
+                                <th>Recognized Text</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultsBody">
+                            <tr class="empty-row">
+                                <td colspan="4">No predictions available. Please upload an image.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+        </main>
+        
+        <footer class="app-footer">
+            <div class="footer-links">
+                <span><i class="fa-solid fa-code-fork"></i> Capstone 2 (Scene Text Reading)</span>
+                <span>·</span>
+                <span>Fine-tuned YOLOv8n & custom CRNN-CTC</span>
+            </div>
+            <div class="author-credits">
+                <span>Developed by <strong>Tran Tuan Kiet</strong></span>
+            </div>
+        </footer>
+    </div>
+</body>
+</html>

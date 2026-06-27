@@ -1,0 +1,212 @@
+{
+  "n_boxes": 1156,
+  "n_images": 246,
+  "avg_boxes": 4.7,
+  "max_boxes": 42,
+  "len_min": 1,
+  "len_med": 5,
+  "len_max": 14,
+  "wh_med": 3.22,
+  "charset": "0123456789abcdefghijklmnopqrstuvwxyz",
+  "raw_distinct_chars": 75,
+  "train_images": 197,
+  "val_images": 49,
+  "det_precision": 0.8337,
+  "det_recall": 0.7826,
+  "det_map50": 0.8203,
+  "det_map": 0.6384,
+  "reco_train": 974,
+  "reco_val": 172,
+  "reco_params": 8724261,
+  "num_classes": 37,
+  "reco_word_acc": 0.5233,
+  "reco_cer": 0.2447,
+  "reco_train_acc": 1.0,
+  "per_length": {
+    "1": [
+      5,
+      10,
+      0.5
+    ],
+    "2": [
+      6,
+      12,
+      0.5
+    ],
+    "3": [
+      11,
+      20,
+      0.55
+    ],
+    "4": [
+      12,
+      25,
+      0.48
+    ],
+    "5": [
+      15,
+      20,
+      0.75
+    ],
+    "6": [
+      17,
+      28,
+      0.607
+    ],
+    "7": [
+      11,
+      17,
+      0.647
+    ],
+    "8": [
+      7,
+      19,
+      0.368
+    ],
+    "9": [
+      3,
+      7,
+      0.429
+    ],
+    "10": [
+      2,
+      6,
+      0.333
+    ],
+    "11": [
+      1,
+      7,
+      0.143
+    ],
+    "13": [
+      0,
+      1,
+      0.0
+    ]
+  },
+  "sample_preds": [
+    [
+      "good",
+      "cood",
+      0
+    ],
+    [
+      "year",
+      "yean",
+      0
+    ],
+    [
+      "taxi",
+      "tx",
+      0
+    ],
+    [
+      "portakabin",
+      "potakabin",
+      0
+    ],
+    [
+      "hp",
+      "do",
+      0
+    ],
+    [
+      "invent",
+      "invent",
+      1
+    ],
+    [
+      "r",
+      "r",
+      1
+    ],
+    [
+      "high",
+      "high",
+      1
+    ],
+    [
+      "lion",
+      "lion",
+      1
+    ],
+    [
+      "red",
+      "red",
+      1
+    ],
+    [
+      "shops",
+      "shops",
+      1
+    ],
+    [
+      "street",
+      "street",
+      1
+    ],
+    [
+      "yard",
+      "yard",
+      1
+    ],
+    [
+      "canon",
+      "pasmm",
+      0
+    ],
+    [
+      "powershot",
+      "puos5ma",
+      0
+    ],
+    [
+      "o",
+      "e",
+      0
+    ],
+    [
+      "c",
+      "r",
+      0
+    ],
+    [
+      "i",
+      "i",
+      1
+    ],
+    [
+      "international",
+      "internatonal",
+      0
+    ],
+    [
+      "computer",
+      "computer",
+      1
+    ],
+    [
+      "science",
+      "science",
+      1
+    ],
+    [
+      "series",
+      "series",
+      1
+    ],
+    [
+      "discrete",
+      "discrete",
+      1
+    ],
+    [
+      "mathematics",
+      "mathelatice",
+      0
+    ]
+  ],
+  "synthetic_per_epoch": 7000,
+  "reco_epochs": 50,
+  "n_fonts": 24
+}

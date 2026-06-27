@@ -1,0 +1,27 @@
+# Ignore PyTorch weights (using ONNX models for web app instead)
+*.pt
+*.pth
+
+# Ignore Jupyter Notebooks
+*.ipynb
+
+# Ignore documents and reports
+*.docx
+*.doc
+*.pdf
+*.pptx
+*.xlsx
+
+# Python cache and temporary directories
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+.env
+
+# Model export scripts
+export_onnx.py
+merge_onnx.py
