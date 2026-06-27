@@ -58,6 +58,15 @@
                         </div>
                         <div class="model-status-item">
                             <div class="model-meta">
+                                <span class="model-name">YOLOv8 COCO Detector</span>
+                                <span class="model-badge" id="cocoBadge"><i class="fa-solid fa-spinner fa-spin"></i> Loading</span>
+                            </div>
+                            <div class="progress-bar-container">
+                                <div class="progress-bar" id="cocoProgress" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div class="model-status-item">
+                            <div class="model-meta">
                                 <span class="model-name">CRNN Text Recognizer</span>
                                 <span class="model-badge" id="crnnBadge"><i class="fa-solid fa-spinner fa-spin"></i> Loading</span>
                             </div>
@@ -67,8 +76,25 @@
                         </div>
                     </div>
 
-                    <!-- Mode Selection -->
+                    <!-- Detection Task Selection -->
                     <div class="control-group">
+                        <label class="control-label">Detection Task</label>
+                        <div class="task-tabs">
+                            <button class="task-tab active" data-task="text" id="taskText">
+                                <i class="fa-solid fa-font"></i>
+                                <span>Scene Text</span>
+                                <small>OCR Pipeline</small>
+                            </button>
+                            <button class="task-tab" data-task="coco" id="taskCoco">
+                                <i class="fa-solid fa-shapes"></i>
+                                <span>General Objects</span>
+                                <small>80 COCO Classes</small>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Mode Selection -->
+                    <div class="control-group" id="modeGroup">
                         <label class="control-label">Inference Mode</label>
                         <div class="mode-tabs">
                             <button class="mode-tab active" data-mode="full" id="modeFull">

@@ -41,13 +41,38 @@ def decode(logp):
         prev=p
     return "".join(out)
 
+import os
+
 @st.cache_resource
 def load_models():
-    det = YOLO("yolo_text.pt")
-    rec = CRNN(NUM_CLASSES).to(DEVICE)
-    rec.load_state_dict(torch.load("crnn_best.pth", map_location=DEVICE, weights_only=True))
-    rec.eval()
-    return det, rec
+    # Helper to find weights in multiple possible locations
+    def find_weight(name):
+        candidates = [
+            os.path.join("weights", name),
+            name,
+            os.path.join("Report", "Capstone2", "weights", name),
+            os.path.join("Capstone2", "weights", name)
+        ]
+        for c in candidates:
+            if os.path.exists(c):
+                return c
+        return name # fallback
+
+    det_text_path = find_weight("yolo_text.pt")
+    crnn_path = find_weight("crnn_best.pth")
+    yolo_coco_path = find_weight("yolov8n.pt")
+    if not os.path.exists(yolo_coco_path) and os.path.exists("yolov8n.pt"):
+        yolo_coco_path = "yolov8n.pt"
+
+    det_text = YOLO(det_text_path)
+    
+    rec_text = CRNN(NUM_CLASSES).to(DEVICE)
+    rec_text.load_state_dict(torch.load(crnn_path, map_location=DEVICE, weights_only=True))
+    rec_text.eval()
+    
+    det_coco = YOLO(yolo_coco_path)
+    
+    return det_text, rec_text, det_coco
 
 def recognize(bgr, rec):
     g = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
@@ -56,31 +81,67 @@ def recognize(bgr, rec):
     with torch.no_grad():
         return decode(rec(x))
 
-det, rec = load_models()
+det_text, rec_text, det_coco = load_models()
 st.title("Scene Text Reader - Object Detection & Recognition (ICDAR 2003)")
 st.caption("YOLOv8 detects text regions + CRNN/CTC recognises the content")
 
-mode = st.sidebar.radio("Mode", ["Full image (Detect + Recognize)", "Cropped word (Recognize only)"])
-conf = st.sidebar.slider("Detection confidence threshold", 0.05, 0.9, 0.25, 0.05)
-up = st.file_uploader("Upload an image", type=["jpg","jpeg","png"])
+# Task selector
+task = st.sidebar.radio("Detection Task", ["Scene Text (OCR)", "General Objects (COCO)"])
 
-if up:
-    img = cv2.cvtColor(np.array(Image.open(up).convert("RGB")), cv2.COLOR_RGB2BGR)
-    if mode.startswith("Full"):
-        res = det.predict(img, conf=conf, verbose=False)[0]
+if task == "Scene Text (OCR)":
+    mode = st.sidebar.radio("Mode", ["Full image (Detect + Recognize)", "Cropped word (Recognize only)"])
+    conf = st.sidebar.slider("Detection confidence threshold", 0.05, 0.9, 0.25, 0.05)
+    up = st.file_uploader("Upload an image", type=["jpg","jpeg","png"])
+    
+    if up:
+        img = cv2.cvtColor(np.array(Image.open(up).convert("RGB")), cv2.COLOR_RGB2BGR)
+        if mode.startswith("Full"):
+            res = det_text.predict(img, conf=conf, verbose=False)[0]
+            vis = img.copy(); rows=[]
+            for b in res.boxes:
+                x1,y1,x2,y2 = map(int, b.xyxy[0].tolist())
+                crop = img[max(0,y1):y2, max(0,x1):x2]
+                if crop.size==0: continue
+                t = recognize(crop, rec_text)
+                rows.append({"text": t, "conf": round(float(b.conf[0]),3)})
+                cv2.rectangle(vis,(x1,y1),(x2,y2),(0,0,255),2)
+                cv2.putText(vis,t,(x1,max(0,y1-6)),cv2.FONT_HERSHEY_SIMPLEX,0.7,(0,255,0),2)
+            c1,c2 = st.columns([2,1])
+            c1.image(cv2.cvtColor(vis,cv2.COLOR_BGR2RGB), use_container_width=True)
+            c2.subheader("Results"); c2.write(f"Detected **{len(rows)}** text boxes")
+            if rows: c2.table(rows)
+        else:
+            st.image(cv2.cvtColor(img,cv2.COLOR_BGR2RGB), width=300)
+            st.success("Read: **%s**" % recognize(img, rec_text))
+else:
+    conf = st.sidebar.slider("Detection confidence threshold", 0.05, 0.9, 0.25, 0.05)
+    up = st.file_uploader("Upload an image", type=["jpg","jpeg","png"])
+    
+    if up:
+        img = cv2.cvtColor(np.array(Image.open(up).convert("RGB")), cv2.COLOR_RGB2BGR)
+        res = det_coco.predict(img, conf=conf, verbose=False)[0]
         vis = img.copy(); rows=[]
+        
+        # Color helper for dynamic vibrant visualization
+        def get_color(class_id):
+            hue = int((class_id * 137.5) % 360)
+            # Convert HSL to BGR (using HSV mapping: S=220, V=230)
+            hsv = np.uint8([[[hue // 2, 220, 230]]])
+            bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)[0][0]
+            return tuple(int(x) for x in bgr)
+
         for b in res.boxes:
             x1,y1,x2,y2 = map(int, b.xyxy[0].tolist())
-            crop = img[max(0,y1):y2, max(0,x1):x2]
-            if crop.size==0: continue
-            t = recognize(crop, rec)
-            rows.append({"text": t, "conf": round(float(b.conf[0]),3)})
-            cv2.rectangle(vis,(x1,y1),(x2,y2),(0,0,255),2)
-            cv2.putText(vis,t,(x1,max(0,y1-6)),cv2.FONT_HERSHEY_SIMPLEX,0.7,(0,255,0),2)
+            class_id = int(b.cls[0])
+            label = res.names[class_id]
+            score = round(float(b.conf[0]), 3)
+            rows.append({"class": label, "conf": score})
+            
+            color = get_color(class_id)
+            cv2.rectangle(vis,(x1,y1),(x2,y2),color,2)
+            cv2.putText(vis, f"{label} {score}", (x1,max(0,y1-6)), cv2.FONT_HERSHEY_SIMPLEX,0.7,color,2)
+            
         c1,c2 = st.columns([2,1])
         c1.image(cv2.cvtColor(vis,cv2.COLOR_BGR2RGB), use_container_width=True)
-        c2.subheader("Results"); c2.write(f"Detected **{len(rows)}** text boxes")
+        c2.subheader("Results"); c2.write(f"Detected **{len(rows)}** objects")
         if rows: c2.table(rows)
-    else:
-        st.image(cv2.cvtColor(img,cv2.COLOR_BGR2RGB), width=300)
-        st.success("Read: **%s**" % recognize(img, rec))

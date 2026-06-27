@@ -303,7 +303,7 @@ body {
 }
 
 /* Interactive Mode tabs */
-.mode-tabs {
+.mode-tabs, .task-tabs {
     display: grid;
     grid-template-columns: 1fr 1fr;
     background: rgba(0, 0, 0, 0.25);
@@ -312,7 +312,7 @@ body {
     border: 1px solid var(--border-glass);
 }
 
-.mode-tab {
+.mode-tab, .task-tab {
     background: transparent;
     border: none;
     padding: 10px;
@@ -327,25 +327,25 @@ body {
     gap: 4px;
 }
 
-.mode-tab i {
+.mode-tab i, .task-tab i {
     font-size: 1rem;
 }
 
-.mode-tab span {
+.mode-tab span, .task-tab span {
     font-size: 0.85rem;
     font-weight: 600;
 }
 
-.mode-tab small {
+.mode-tab small, .task-tab small {
     font-size: 0.7rem;
     color: var(--text-muted);
 }
 
-.mode-tab:hover {
+.mode-tab:hover, .task-tab:hover {
     color: #ffffff;
 }
 
-.mode-tab.active {
+.mode-tab.active, .task-tab.active {
     background: var(--bg-card);
     color: #ffffff;
     border: 1px solid var(--border-glass);

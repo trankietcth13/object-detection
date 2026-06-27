@@ -5,6 +5,8 @@ const statusIndicator = systemStatus.querySelector('.status-indicator');
 
 const yoloBadge = document.getElementById('yoloBadge');
 const yoloProgress = document.getElementById('yoloProgress');
+const cocoBadge = document.getElementById('cocoBadge');
+const cocoProgress = document.getElementById('cocoProgress');
 const crnnBadge = document.getElementById('crnnBadge');
 const crnnProgress = document.getElementById('crnnProgress');
 
@@ -14,6 +16,10 @@ const clearBtn = document.getElementById('clearBtn');
 const imageCanvas = document.getElementById('imageCanvas');
 const canvasPlaceholder = document.getElementById('canvasPlaceholder');
 const canvasWrapper = document.getElementById('canvasWrapper');
+
+const taskText = document.getElementById('taskText');
+const taskCoco = document.getElementById('taskCoco');
+const modeGroup = document.getElementById('modeGroup');
 
 const modeFull = document.getElementById('modeFull');
 const modeCrop = document.getElementById('modeCrop');
@@ -29,8 +35,10 @@ const resultsBody = document.getElementById('resultsBody');
 
 // App State
 let yoloSession = null;
+let cocoSession = null;
 let crnnSession = null;
 let loadedImage = null;
+let currentTask = 'text'; // 'text' or 'coco'
 let currentMode = 'full'; // 'full' or 'crop'
 
 // Character mapping for CRNN
@@ -39,6 +47,18 @@ const idx2char = {};
 for (let i = 0; i < CHARS.length; i++) {
     idx2char[i + 1] = CHARS[i];
 }
+
+// 80 COCO classes
+const COCO_CLASSES = [
+    "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
+    "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
+    "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
+    "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard", "tennis racket", "bottle",
+    "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple", "sandwich", "orange",
+    "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch", "potted plant", "bed",
+    "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "cell phone", "microwave", "oven",
+    "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear", "hair drier", "toothbrush"
+];
 
 // Slider update
 confSlider.addEventListener('input', (e) => {
@@ -64,6 +84,53 @@ modeCrop.addEventListener('click', () => {
     modeCrop.classList.add('active');
     modeFull.classList.remove('active');
     thresholdGroup.style.display = 'none';
+    if (loadedImage) runInference();
+});
+
+// Task tab handlers
+taskText.addEventListener('click', () => {
+    if (currentTask === 'text') return;
+    currentTask = 'text';
+    taskText.classList.add('active');
+    taskCoco.classList.remove('active');
+    
+    // Show OCR-related controls
+    modeGroup.style.display = 'flex';
+    if (currentMode === 'full') {
+        thresholdGroup.style.display = 'flex';
+    } else {
+        thresholdGroup.style.display = 'none';
+    }
+    
+    // Update results table header
+    resultsTable.querySelector('thead tr').innerHTML = `
+        <th style="width: 80px;">Index</th>
+        <th style="width: 150px;">Confidence</th>
+        <th style="width: 200px;">Bounding Box</th>
+        <th>Recognized Text</th>
+    `;
+    
+    if (loadedImage) runInference();
+});
+
+taskCoco.addEventListener('click', () => {
+    if (currentTask === 'coco') return;
+    currentTask = 'coco';
+    taskCoco.classList.add('active');
+    taskText.classList.remove('active');
+    
+    // Hide OCR-only controls
+    modeGroup.style.display = 'none';
+    thresholdGroup.style.display = 'flex'; // always show threshold for object detection
+    
+    // Update results table header for Object Detection
+    resultsTable.querySelector('thead tr').innerHTML = `
+        <th style="width: 80px;">Index</th>
+        <th style="width: 150px;">Confidence</th>
+        <th style="width: 200px;">Bounding Box</th>
+        <th>Object Category</th>
+    `;
+    
     if (loadedImage) runInference();
 });
 
@@ -189,7 +256,7 @@ async function initModels() {
     try {
         console.log("Loading models...");
         
-        // 1. Load YOLOv8
+        // 1. Load YOLOv8 Text
         const yoloBytes = await fetchWithProgress('weights/yolo_text.onnx', (percent, statusMsg) => {
             yoloProgress.style.width = `${percent}%`;
             yoloBadge.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${statusMsg}`;
@@ -199,7 +266,17 @@ async function initModels() {
         yoloBadge.className = "model-badge loaded";
         yoloBadge.innerHTML = `<i class="fa-solid fa-check"></i> Ready`;
         
-        // 2. Load CRNN
+        // 2. Load YOLOv8 COCO
+        const cocoBytes = await fetchWithProgress('weights/yolov8n.onnx', (percent, statusMsg) => {
+            cocoProgress.style.width = `${percent}%`;
+            cocoBadge.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${statusMsg}`;
+        });
+        cocoBadge.innerHTML = `<i class="fa-solid fa-bolt"></i> Compiling...`;
+        cocoSession = await ort.InferenceSession.create(cocoBytes);
+        cocoBadge.className = "model-badge loaded";
+        cocoBadge.innerHTML = `<i class="fa-solid fa-check"></i> Ready`;
+        
+        // 3. Load CRNN
         const crnnBytes = await fetchWithProgress('weights/crnn_best.onnx', (percent, statusMsg) => {
             crnnProgress.style.width = `${percent}%`;
             crnnBadge.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> ${statusMsg}`;
@@ -214,12 +291,12 @@ async function initModels() {
         statusText.textContent = "System Ready";
         uploadArea.classList.remove('disabled');
         fileInput.disabled = false;
-        console.log("Both models loaded successfully.");
+        console.log("All three models loaded successfully.");
     } catch (err) {
         console.error("Failed to load models:", err);
         statusText.textContent = "Initialization Failed";
         statusText.style.color = "var(--error)";
-        alert("Failed to load ONNX models. Please ensure weights/yolo_text.onnx and weights/crnn_best.onnx are correctly deployed on the server.");
+        alert("Failed to load ONNX models. Please ensure weights/yolo_text.onnx, weights/yolov8n.onnx and weights/crnn_best.onnx are correctly deployed on the server.");
     }
 }
 
@@ -290,9 +367,17 @@ function decodeCTC(outputData) {
     return out.join("");
 }
 
+// Dynamic color generation helper
+function getClassColor(classId) {
+    if (classId === undefined) return '#10B981';
+    // Generate a vibrant HSL color based on class ID
+    const hue = (classId * 137.5) % 360; // golden ratio spacing
+    return `hsl(${hue}, 85%, 55%)`;
+}
+
 // Inference Runner
 async function runInference() {
-    if (!loadedImage || !yoloSession || !crnnSession) return;
+    if (!loadedImage || !yoloSession || !cocoSession || !crnnSession) return;
     
     const startTime = performance.now();
     statusIndicator.className = "status-indicator ready";
@@ -301,58 +386,149 @@ async function runInference() {
     try {
         const results = [];
         
-        if (currentMode === 'full') {
-            // --- TASK 1: DETECT (YOLOv8) ---
-            // Resize and Letterbox input to 640x640
-            const yoloCanvas = document.createElement('canvas');
-            yoloCanvas.width = 640;
-            yoloCanvas.height = 640;
-            const yoloCtx = yoloCanvas.getContext('2d');
-            
-            // Fill with YOLOv8 default gray pad (114, 114, 114)
-            yoloCtx.fillStyle = 'rgb(114, 114, 114)';
-            yoloCtx.fillRect(0, 0, 640, 640);
-            
-            const scale = Math.min(640 / loadedImage.width, 640 / loadedImage.height);
-            const newW = loadedImage.width * scale;
-            const newH = loadedImage.height * scale;
-            const padX = (640 - newW) / 2;
-            const padY = (640 - newH) / 2;
-            yoloCtx.drawImage(loadedImage, padX, padY, newW, newH);
-            
-            // Extract tensor BCHW
-            const imgData = yoloCtx.getImageData(0, 0, 640, 640);
-            const pixels = imgData.data;
-            const r = new Float32Array(640 * 640);
-            const g = new Float32Array(640 * 640);
-            const b = new Float32Array(640 * 640);
-            
-            for (let i = 0; i < 640 * 640; i++) {
-                r[i] = pixels[i * 4] / 255.0;
-                g[i] = pixels[i * 4 + 1] / 255.0;
-                b[i] = pixels[i * 4 + 2] / 255.0;
+        // Common Preprocessing: Resize and Letterbox input to 640x640
+        const yoloCanvas = document.createElement('canvas');
+        yoloCanvas.width = 640;
+        yoloCanvas.height = 640;
+        const yoloCtx = yoloCanvas.getContext('2d');
+        
+        // Fill with YOLOv8 default gray pad (114, 114, 114)
+        yoloCtx.fillStyle = 'rgb(114, 114, 114)';
+        yoloCtx.fillRect(0, 0, 640, 640);
+        
+        const scale = Math.min(640 / loadedImage.width, 640 / loadedImage.height);
+        const newW = loadedImage.width * scale;
+        const newH = loadedImage.height * scale;
+        const padX = (640 - newW) / 2;
+        const padY = (640 - newH) / 2;
+        yoloCtx.drawImage(loadedImage, padX, padY, newW, newH);
+        
+        // Extract tensor BCHW
+        const imgData = yoloCtx.getImageData(0, 0, 640, 640);
+        const pixels = imgData.data;
+        const r = new Float32Array(640 * 640);
+        const g = new Float32Array(640 * 640);
+        const b = new Float32Array(640 * 640);
+        
+        for (let i = 0; i < 640 * 640; i++) {
+            r[i] = pixels[i * 4] / 255.0;
+            g[i] = pixels[i * 4 + 1] / 255.0;
+            b[i] = pixels[i * 4 + 2] / 255.0;
+        }
+        
+        const tensorData = new Float32Array(3 * 640 * 640);
+        tensorData.set(r, 0);
+        tensorData.set(g, 640 * 640);
+        tensorData.set(b, 2 * 640 * 640);
+        
+        const yoloInputTensor = new ort.Tensor('float32', tensorData, [1, 3, 640, 640]);
+        const threshold = parseFloat(confSlider.value);
+
+        if (currentTask === 'text') {
+            if (currentMode === 'full') {
+                // --- TASK 1: DETECT (YOLOv8 Text) ---
+                // Run YOLOv8
+                const yoloOutputs = await yoloSession.run({ images: yoloInputTensor });
+                const yoloOutputTensor = yoloOutputs[Object.keys(yoloOutputs)[0]];
+                const outData = yoloOutputTensor.data; // shape (1, 5, 8400)
+                
+                // Parse candidates
+                const candidates = [];
+                const scores = [];
+                
+                for (let a = 0; a < 8400; a++) {
+                    const score = outData[4 * 8400 + a];
+                    if (score >= threshold) {
+                        const cx = outData[0 * 8400 + a];
+                        const cy = outData[1 * 8400 + a];
+                        const w = outData[2 * 8400 + a];
+                        const h = outData[3 * 8400 + a];
+                        
+                        const x1 = cx - w / 2;
+                        const y1 = cy - h / 2;
+                        const x2 = cx + w / 2;
+                        const y2 = cy + h / 2;
+                        
+                        candidates.push([x1, y1, x2, y2]);
+                        scores.push(score);
+                    }
+                }
+                
+                // Run NMS
+                const keepIndices = runNMS(candidates, scores, 0.45);
+                
+                // For each crop, run CRNN
+                const cropCanvas = document.createElement('canvas');
+                cropCanvas.width = 100;
+                cropCanvas.height = 32;
+                const cropCtx = cropCanvas.getContext('2d');
+                
+                for (let idx = 0; idx < keepIndices.length; idx++) {
+                    const kid = keepIndices[idx];
+                    const box = candidates[kid];
+                    const score = scores[kid];
+                    
+                    // Map coordinates back to original image
+                    let x1 = (box[0] - padX) / scale;
+                    let y1 = (box[1] - padY) / scale;
+                    let x2 = (box[2] - padX) / scale;
+                    let y2 = (box[3] - padY) / scale;
+                    
+                    // Clip
+                    x1 = Math.max(0, Math.min(loadedImage.width, x1));
+                    y1 = Math.max(0, Math.min(loadedImage.height, y1));
+                    x2 = Math.max(0, Math.min(loadedImage.width, x2));
+                    y2 = Math.max(0, Math.min(loadedImage.height, y2));
+                    
+                    const w = x2 - x1;
+                    const h = y2 - y1;
+                    
+                    if (w <= 2 || h <= 2) continue;
+                    
+                    // Run CRNN
+                    const text = await runCRNNOnCrop(x1, y1, w, h, cropCanvas, cropCtx);
+                    results.push({
+                        text: text,
+                        score: score,
+                        box: [Math.round(x1), Math.round(y1), Math.round(x2), Math.round(y2)]
+                    });
+                }
+            } else {
+                // --- TASK 2: RECOGNIZE ONLY (CRNN) ---
+                const cropCanvas = document.createElement('canvas');
+                cropCanvas.width = 100;
+                cropCanvas.height = 32;
+                const cropCtx = cropCanvas.getContext('2d');
+                
+                const text = await runCRNNOnCrop(0, 0, loadedImage.width, loadedImage.height, cropCanvas, cropCtx);
+                results.push({
+                    text: text,
+                    score: 1.0,
+                    box: [0, 0, loadedImage.width, loadedImage.height]
+                });
             }
+        } else {
+            // --- TASK 3: DETECT OBJECTS (YOLOv8 COCO) ---
+            const cocoOutputs = await cocoSession.run({ images: yoloInputTensor });
+            const cocoOutputTensor = cocoOutputs[Object.keys(cocoOutputs)[0]];
+            const outData = cocoOutputTensor.data; // shape (1, 84, 8400)
             
-            const tensorData = new Float32Array(3 * 640 * 640);
-            tensorData.set(r, 0);
-            tensorData.set(g, 640 * 640);
-            tensorData.set(b, 2 * 640 * 640);
-            
-            const yoloInputTensor = new ort.Tensor('float32', tensorData, [1, 3, 640, 640]);
-            
-            // Run YOLOv8
-            const yoloOutputs = await yoloSession.run({ images: yoloInputTensor });
-            const yoloOutputTensor = yoloOutputs[Object.keys(yoloOutputs)[0]];
-            const outData = yoloOutputTensor.data; // shape (1, 5, 8400)
-            
-            // Parse candidates
             const candidates = [];
             const scores = [];
-            const threshold = parseFloat(confSlider.value);
+            const classes = [];
             
             for (let a = 0; a < 8400; a++) {
-                const score = outData[4 * 8400 + a];
-                if (score >= threshold) {
+                let maxClassScore = -Infinity;
+                let bestClassId = -1;
+                for (let c = 0; c < 80; c++) {
+                    const score = outData[(4 + c) * 8400 + a];
+                    if (score > maxClassScore) {
+                        maxClassScore = score;
+                        bestClassId = c;
+                    }
+                }
+                
+                if (maxClassScore >= threshold) {
                     const cx = outData[0 * 8400 + a];
                     const cy = outData[1 * 8400 + a];
                     const w = outData[2 * 8400 + a];
@@ -364,63 +540,51 @@ async function runInference() {
                     const y2 = cy + h / 2;
                     
                     candidates.push([x1, y1, x2, y2]);
-                    scores.push(score);
+                    scores.push(maxClassScore);
+                    classes.push(bestClassId);
                 }
             }
             
             // Run NMS
             const keepIndices = runNMS(candidates, scores, 0.45);
             
-            // For each crop, run CRNN
-            const cropCanvas = document.createElement('canvas');
-            cropCanvas.width = 100;
-            cropCanvas.height = 32;
-            const cropCtx = cropCanvas.getContext('2d');
-            
             for (let idx = 0; idx < keepIndices.length; idx++) {
                 const kid = keepIndices[idx];
                 const box = candidates[kid];
                 const score = scores[kid];
+                const classId = classes[kid];
                 
-                // Map coordinates back to original image
                 let x1 = (box[0] - padX) / scale;
                 let y1 = (box[1] - padY) / scale;
                 let x2 = (box[2] - padX) / scale;
                 let y2 = (box[3] - padY) / scale;
                 
-                // Clip
                 x1 = Math.max(0, Math.min(loadedImage.width, x1));
                 y1 = Math.max(0, Math.min(loadedImage.height, y1));
                 x2 = Math.max(0, Math.min(loadedImage.width, x2));
                 y2 = Math.max(0, Math.min(loadedImage.height, y2));
                 
-                const w = x2 - x1;
-                const h = y2 - y1;
-                
-                if (w <= 2 || h <= 2) continue;
-                
-                // Run CRNN
-                const text = await runCRNNOnCrop(x1, y1, w, h, cropCanvas, cropCtx);
                 results.push({
-                    text: text,
+                    text: COCO_CLASSES[classId],
                     score: score,
-                    box: [Math.round(x1), Math.round(y1), Math.round(x2), Math.round(y2)]
+                    box: [Math.round(x1), Math.round(y1), Math.round(x2), Math.round(y2)],
+                    classId: classId
                 });
             }
-        } else {
-            // --- TASK 2: RECOGNIZE ONLY (CRNN) ---
-            const cropCanvas = document.createElement('canvas');
-            cropCanvas.width = 100;
-            cropCanvas.height = 32;
-            const cropCtx = cropCanvas.getContext('2d');
-            
-            const text = await runCRNNOnCrop(0, 0, loadedImage.width, loadedImage.height, cropCanvas, cropCtx);
-            results.push({
-                text: text,
-                score: 1.0,
-                box: [0, 0, loadedImage.width, loadedImage.height]
-            });
         }
+        
+        // Render Canvas
+        renderCanvas(results);
+        
+        // Render results table & stats
+        renderResultsTable(results, startTime);
+        
+    } catch (err) {
+        console.error("Inference failed:", err);
+        statusText.textContent = "Inference Error";
+        statusIndicator.className = "status-indicator loading"; // turns warning/amber
+    }
+}
         
         // Render Canvas
         renderCanvas(results);
@@ -467,17 +631,19 @@ function renderCanvas(results) {
     imageCanvas.height = loadedImage.height;
     ctx.drawImage(loadedImage, 0, 0);
     
-    if (currentMode === 'crop') return; // Don't draw boxes on full image in Crop-only mode
+    if (currentTask === 'text' && currentMode === 'crop') return; // Don't draw boxes on full image in Crop-only mode
     
     results.forEach((res, index) => {
         const [x1, y1, x2, y2] = res.box;
         const w = x2 - x1;
         const h = y2 - y1;
         
+        const color = getClassColor(res.classId);
+        
         // 1. Draw glowing neon bounding box
-        ctx.strokeStyle = '#10B981';
+        ctx.strokeStyle = color;
         ctx.lineWidth = Math.max(2, Math.round(loadedImage.width / 300));
-        ctx.shadowColor = 'rgba(16, 185, 129, 0.6)';
+        ctx.shadowColor = color.replace('hsl', 'hsla').replace(')', ', 0.6)');
         ctx.shadowBlur = 8;
         ctx.strokeRect(x1, y1, w, h);
         
@@ -496,7 +662,7 @@ function renderCanvas(results) {
         const badgeY = y1 - badgeHeight >= 0 ? y1 - badgeHeight : y1 + h;
         
         ctx.fillRect(x1 - 1, badgeY, textWidth + 12, badgeHeight);
-        ctx.strokeStyle = '#10B981';
+        ctx.strokeStyle = color;
         ctx.lineWidth = 1;
         ctx.strokeRect(x1 - 1, badgeY, textWidth + 12, badgeHeight);
         
@@ -514,12 +680,13 @@ function renderResultsTable(results, startTime) {
     statsArea.style.display = 'flex';
     
     if (results.length === 0) {
+        const typeStr = currentTask === 'text' ? 'text' : 'objects';
         resultsBody.innerHTML = `
             <tr class="empty-row">
-                <td colspan="4">No text detected. Try lowering the confidence threshold.</td>
+                <td colspan="4">No ${typeStr} detected. Try lowering the confidence threshold.</td>
             </tr>
         `;
-        statusText.textContent = "No Text Detected";
+        statusText.textContent = `No ${typeStr.charAt(0).toUpperCase() + typeStr.slice(1)} Detected`;
         return;
     }
     
@@ -534,12 +701,17 @@ function renderResultsTable(results, startTime) {
         
         const boxStr = `[${res.box.join(', ')}]`;
         
+        // Vibrant category coloring in table
+        const color = getClassColor(res.classId);
+        const translucentBg = color.replace('hsl', 'hsla').replace(')', ', 0.12)');
+        const borderCol = color.replace('hsl', 'hsla').replace(')', ', 0.35)');
+        
         html += `
             <tr>
                 <td class="idx-col">${index + 1}</td>
                 <td class="conf-col ${confClass}">${confPct}%</td>
                 <td class="box-col">${boxStr}</td>
-                <td><span class="text-col">${res.text.toUpperCase() || '<em>[BLANK]</em>'}</span></td>
+                <td><span class="text-col" style="background: ${translucentBg}; border-color: ${borderCol}; color: ${color};">${res.text.toUpperCase() || '<em>[BLANK]</em>'}</span></td>
             </tr>
         `;
     });
